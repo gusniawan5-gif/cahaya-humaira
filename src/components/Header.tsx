@@ -67,7 +67,7 @@ export default function Header() {
         {/* Target Channels Badge */}
         <div className="flex items-center gap-2.5 flex-wrap justify-center">
           <a
-            href="https://instagram.com/cahayahumaira"
+            href="https://instagram.com/cahayahumaira783"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-humaira-pinkLight border border-humaira-pinkHover hover:bg-humaira-pink transition-all shadow-sm text-xs font-semibold text-humaira-plum group"
@@ -75,7 +75,7 @@ export default function Header() {
             <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center text-white">
               <Instagram className="w-3 h-3" />
             </div>
-            <span>@cahayahumaira</span>
+            <span>@cahayahumaira783</span>
             <span className="w-1.5 h-1.5 rounded-full bg-humaira-sage animate-ping"></span>
           </a>
 
