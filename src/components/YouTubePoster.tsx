@@ -126,6 +126,7 @@ export default function YouTubePoster({
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <AutoSubtitle />
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-red-50 via-humaira-cream to-rose-50 rounded-3xl p-6 sm:p-7 border border-red-200/60 shadow-soft">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
