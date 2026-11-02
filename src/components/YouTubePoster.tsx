@@ -352,7 +352,7 @@ export default function YouTubePoster({
                 </a>
               </div>
             )}
-<AutoSubtitle videoFile={videoFile} />
+<AutoSubtitle />
             {errorMessage && (
               <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
