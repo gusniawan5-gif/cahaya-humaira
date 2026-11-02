@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { ApiSettings } from "@/types";
-
+import AutoSubtitle from "./AutoSubtitle";
 interface YouTubePosterProps {
   videoFile: File | null;
   videoUrl: string | null;
