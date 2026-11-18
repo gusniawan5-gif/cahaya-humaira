@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
         success: true,
         isSimulation: true,
         videoId: dummyId,
-        videoUrl: `https://youtube.com/${isShorts ? "shorts" : "watch?v="}${dummyId}`,
+        videoUrl: `https://youtube.com/${isShorts ? "shorts/" : "watch?v="}${dummyId}`,
         isShorts,
         title,
         privacyStatus,
