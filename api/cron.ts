@@ -9,11 +9,9 @@ export default async function handler(req: any, res: any) {
     const { blobs } = await list({ prefix: 'videos/' });
     
     if (blobs.length === 0) {
-      console.log("Tidak ada video di Blob");
-      return res.status(200).json({ message: 'Tidak ada video, akhi. Upload lagi via website!' });
+      return res.status(200).json({ message: 'Tidak ada video di Blob, upload lagi via website ya akhi!' });
     }
 
-    // Ambil video paling lama (antrian)
     const videoToUpload = blobs[0];
     console.log("Mau upload:", videoToUpload.pathname);
 
@@ -34,26 +32,22 @@ export default async function handler(req: any, res: any) {
     const videoResponse = await fetch(videoToUpload.url);
     const videoBuffer = await videoResponse.arrayBuffer();
 
-    // 4. Buat judul Islami sesuai jam
-    const hour = new Date().getHours();
-    const isMorning = hour < 12;
-    const judulPrefix = isMorning ? "Mutiara Dakwah Pagi - " : "Mutiara Dakwah Sore - ";
-    
+    // 4. JUDUL DARI NAMA FILE - SESUAI DAKWAH ANTUM
     const fileName = videoToUpload.pathname.replace('videos/', '').replace('.mp4','');
+    const cleanTitle = fileName.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()); // Jadi Title Case
     
-    // 5. Upload ke YouTube Cahaya Humaira
+    // 5. Upload ke YouTube
     const youtubeResponse = await youtube.videos.insert({
       part: ['snippet,status'],
       requestBody: {
         snippet: {
-          title: `${judulPrefix}${fileName} | Cahaya Humaira`,
-          description: `Bismillah. Video edukasi adab Islami .\n\nCahaya Humaira mengajarkan adab-adab harian sesuai sunnah.\n\nJangan lupa Subscribe, Like, dan Share untuk dakwah.\n\n#adabanakislam #cahayahumaira #edukasiislam #adabislam`,
-          tags: ['cahaya humaira', 'adab islam', 'edukasi islam ', 'kartun islami'],
-          categoryId: '27', // Education
+          title: `${cleanTitle} | Cahaya Humaira`,
+          description: `Bismillah.\n\n${cleanTitle} - Kajian Dakwah Islam.\n\nSemoga bermanfaat untuk kita semua. Jangan lupa Subscribe channel Cahaya Humaira untuk dakwah harian jam 5 pagi & 5 sore.\n\nBarakallahu fiikum.\n\n#CahayaHumaira #Dakwah #Adab #Akhlak #KajianIslam`,
+          tags: ['cahaya humaira', 'dakwah islam', 'adab', 'akhlak', 'kajian islam', 'ceramah'],
+          categoryId: '22',
         },
         status: {
           privacyStatus: 'public',
-          selfDeclaredMadeForKids: true,
         },
       },
       media: {
@@ -63,14 +57,13 @@ export default async function handler(req: any, res: any) {
 
     console.log("Berhasil upload YouTube ID:", youtubeResponse.data.id);
 
-    // 6. Hapus dari Vercel Blob biar hemat 500MB
+    // 6. Hapus dari Vercel Blob biar hemat
     await del(videoToUpload.url);
-    console.log("Dihapus dari Blob:", videoToUpload.url);
 
     return res.status(200).json({ 
       success: true, 
       youtubeId: youtubeResponse.data.id,
-      message: `Alhamdulillah berhasil upload jam ${isMorning ? '5 Subuh' : '5 Sore'}` 
+      title: cleanTitle
     });
 
   } catch (error: any) {
