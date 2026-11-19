@@ -17,7 +17,8 @@
     "lucide-react": "^0.453.0",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.4",
-    "canvas-confetti": "^1.9.3"
+    "canvas-confetti": "^1.9.3",
+    "@vercel/blob": "^0.23.0"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
