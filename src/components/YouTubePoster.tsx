@@ -46,7 +46,7 @@ export default function YouTubePoster({
   const [publishedVideoUrl, setPublishedVideoUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
-
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   // Auto-detect Shorts eligibility
   const isShorts = true; // Assuming short dakwah reels/clips
 
@@ -55,75 +55,78 @@ export default function YouTubePoster({
     if (videoCaption) setDescription(videoCaption);
   }, [videoTitle, videoCaption]);
 
-  const handleYouTubeUpload = async () => {
+ const handleYouTubeUpload = async () => {
     setLoading(true);
     setErrorMessage(null);
     setUploadNotice(null);
-
+    setUploadProgress(0);
     try {
-      let response;
-      if (videoFile && !simulateMode) {
-        // Send as FormData for real file transfer
-        const formData = new FormData();
-        formData.append("video", videoFile);
-        formData.append("title", title);
-        formData.append("description", description);
-        formData.append("tags", tags);
-        formData.append("privacyStatus", privacyStatus);
-        formData.append("isShorts", isShorts ? "true" : "false");
-        formData.append("simulate", simulateMode ? "true" : "false");
-
-        response = await fetch("/api/youtube/upload", {
-          method: "POST",
-          body: formData,
-        });
-      } else {
-        // Send JSON request
-        response = await fetch("/api/youtube/upload", {
+      if (!videoFile && !simulateMode) throw new Error("Pilih video dulu akhi.");
+      if (simulateMode) {
+        const response = await fetch("/api/youtube/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title,
-            description,
-            tags,
-            privacyStatus,
-            isShorts,
-            simulate: simulateMode,
-          }),
+          body: JSON.stringify({ title, description, tags, privacyStatus, isShorts, simulate: true }),
         });
+        const data = await response.json();
+        setUploadSuccess(true);
+        setPublishedVideoUrl(data.videoUrl);
+        if (onPostPublished) onPostPublished("youtube", data.videoId);
+        return;
       }
 
-      const data = await response.json();
+      // 1. Minta tiket upload ke Vercel (file belum dikirim)
+      const initRes = await fetch("/api/youtube/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title, description, tags, privacyStatus, isShorts,
+          fileSize: videoFile!.size,
+          fileType: videoFile!.type || "video/mp4",
+          clientId: (apiSettings as any).youtubeClientId,
+          clientSecret: (apiSettings as any).youtubeClientSecret,
+          refreshToken: (apiSettings as any).youtubeRefreshToken,
+        }),
+      });
+      const initData = await initRes.json();
+      if (!initData.success) throw new Error(initData.error);
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Gagal mengunggah ke YouTube.");
+      // 2. Upload langsung Browser -> YouTube, per 8MB
+      const CHUNK = 8 * 1024 * 1024;
+      let uploaded = 0;
+      let lastResult: any = null;
+      while (uploaded < videoFile!.size) {
+        const end = Math.min(uploaded + CHUNK, videoFile!.size);
+        const chunk = videoFile!.slice(uploaded, end);
+        const putRes = await fetch(initData.uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": videoFile!.type || "video/mp4",
+            "Content-Range": `bytes ${uploaded}-${end - 1}/${videoFile!.size}`,
+          },
+          body: chunk,
+        });
+        uploaded = end;
+        setUploadProgress(Math.round((uploaded / videoFile!.size) * 100));
+        if (putRes.status === 200 || putRes.status === 201) {
+          lastResult = await putRes.json();
+        }
       }
 
+      const videoId = lastResult?.id || "CH_" + Date.now();
+      const videoUrl = `https://youtube.com/${isShorts ? "shorts/" : "watch?v="}${videoId}`;
       setUploadSuccess(true);
-      setPublishedVideoUrl(data.videoUrl || "https://youtube.com/shorts/dummyId");
-      if (data.notice) {
-        setUploadNotice(data.notice);
-      }
-
+      setPublishedVideoUrl(videoUrl);
       try {
-        confetti({
-          particleCount: 90,
-          spread: 75,
-          origin: { y: 0.6 },
-          colors: ["#FF0000", "#D4AF37", "#FADADD", "#FFFFFF"],
-        });
-      } catch (e) {}
-
-      if (onPostPublished) {
-        onPostPublished("youtube", data.videoId || "CH_yt123");
-      }
+        confetti({ particleCount: 90, spread: 75, origin: { y: 0.6 }, colors: ["#FF0000", "#D4AF37", "#FADADD", "#FFFFFF"] });
+      } catch {}
+      if (onPostPublished) onPostPublished("youtube", videoId);
     } catch (err: any) {
       setErrorMessage(err.message || "Terjadi kendala saat upload.");
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <div className="space-y-6 animate-fade-in">
       <AutoSubtitle />
@@ -288,7 +291,7 @@ export default function YouTubePoster({
               {loading ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Mengunggah ke YouTube Data API v3...</span>
+                  <span>Mengunggah... {uploadProgress}% - Jangan tutup tab ya akhi</span>
                 </>
               ) : (
                 <>
