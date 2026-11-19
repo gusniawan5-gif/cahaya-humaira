@@ -1,104 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadVideoToYouTube } from "@/lib/youtube";
+import { google } from "googleapis";
 
+// Ini cuma bikin SESI upload, bukan upload file-nya
+// Jadi Vercel gak keberatan walau 500MB
 export async function POST(req: NextRequest) {
   try {
-    const contentType = req.headers.get("content-type") || "";
+    const body = await req.json();
+    const { title, description, tags, privacyStatus, fileSize, fileType } = body;
 
-    let title = "";
-    let description = "";
-    let tagsStr = "";
-    let privacyStatus: "public" | "unlisted" | "private" = "public";
-    let isShorts = false;
-    let videoBuffer: Buffer | null = null;
-    let simulate = false;
+    const clientId = body.clientId || process.env.YOUTUBE_CLIENT_ID || "";
+    const clientSecret = body.clientSecret || process.env.YOUTUBE_CLIENT_SECRET || "";
+    const refreshToken = body.refreshToken || process.env.YOUTUBE_REFRESH_TOKEN || "";
 
-    let clientId = process.env.YOUTUBE_CLIENT_ID || "";
-    let clientSecret = process.env.YOUTUBE_CLIENT_SECRET || "";
-    let refreshToken = process.env.YOUTUBE_REFRESH_TOKEN || "";
+    if (!clientId || !clientSecret || !refreshToken) {
+      return NextResponse.json({ success: false, error: "API belum diisi" }, { status: 400 });
+    }
 
-    if (contentType.includes("multipart/form-data")) {
-      const formData = await req.formData();
-      title = (formData.get("title") as string) || "Kajian Muslimah Cahaya Humaira";
-      description = (formData.get("description") as string) || "";
-      tagsStr = (formData.get("tags") as string) || "";
-      privacyStatus = (formData.get("privacyStatus") as any) || "public";
-      isShorts = formData.get("isShorts") === "true";
-      simulate = formData.get("simulate") === "true";
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
 
-      const file = formData.get("video") as File | null;
-      if (file) {
-        const arrayBuffer = await file.arrayBuffer();
-        videoBuffer = Buffer.from(arrayBuffer);
+    // Minta link resumable ke Google
+    const youtube = google.youtube({ version: "v3", auth: oauth2Client });
+
+    // Kita pakai fetch langsung ke Google biar dapat upload URL
+    const accessToken = (await oauth2Client.getAccessToken()).token;
+
+    const initRes = await fetch(
+      "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "X-Upload-Content-Length": String(fileSize),
+          "X-Upload-Content-Type": fileType || "video/mp4",
+        },
+        body: JSON.stringify({
+          snippet: {
+            title: title || "Kajian Muslimah Cahaya Humaira",
+            description: description || "",
+            tags: tags ? tags.split(",").map((t: string) => t.trim()) : ["Cahaya Humaira", "Dakwah Muslimah"],
+            categoryId: "27",
+          },
+          status: { privacyStatus: privacyStatus || "public", selfDeclaredMadeForKids: false },
+        }),
       }
+    );
 
-      if (formData.get("clientId")) clientId = formData.get("clientId") as string;
-      if (formData.get("clientSecret")) clientSecret = formData.get("clientSecret") as string;
-      if (formData.get("refreshToken")) refreshToken = formData.get("refreshToken") as string;
-    } else {
-      const body = await req.json();
-      title = body.title || "Kajian Muslimah Cahaya Humaira";
-      description = body.description || "";
-      tagsStr = body.tags || "";
-      privacyStatus = body.privacyStatus || "public";
-      isShorts = body.isShorts || false;
-      simulate = body.simulate || false;
-      if (body.clientId) clientId = body.clientId;
-      if (body.clientSecret) clientSecret = body.clientSecret;
-      if (body.refreshToken) refreshToken = body.refreshToken;
+    const uploadUrl = initRes.headers.get("location");
+    if (!uploadUrl) {
+      const errText = await initRes.text();
+      return NextResponse.json({ success: false, error: "Gagal buat sesi upload: " + errText }, { status: 500 });
     }
 
-    const tags = tagsStr
-      ? tagsStr.split(",").map((t: string) => t.trim())
-      : ["Cahaya Humaira", "Dakwah Muslimah", "Jambi Mengaji"];
-
-    // Simulation / Sandbox Mode
-    if (simulate || !clientId || !clientSecret || !refreshToken || !videoBuffer) {
-      const dummyId = "CH_" + Math.random().toString(36).substring(2, 9);
-      return NextResponse.json({
-        success: true,
-        isSimulation: true,
-        videoId: dummyId,
-        videoUrl: `https://youtube.com/${isShorts ? "shorts/" : "watch?v="}${dummyId}`,
-        isShorts,
-        title,
-        privacyStatus,
-        message: isShorts
-          ? "Video durasi < 60 detik berhasil disimulasikan sebagai YouTube Shorts!"
-          : "Video berhasil disimulasikan terbit ke YouTube Channel!",
-        notice:
-          !clientId || !refreshToken
-            ? "Mode Simulasi Aktif: Untuk upload langsung ke channel YouTube asli, silakan isi YouTube Client ID & Refresh Token di menu Pengaturan API."
-            : undefined,
-      });
-    }
-
-    // REAL YOUTUBE DATA API UPLOAD
-    const uploadResult = await uploadVideoToYouTube({
-      clientId,
-      clientSecret,
-      refreshToken,
-      title,
-      description,
-      tags,
-      privacyStatus,
-      isShorts,
-      videoBuffer,
-    });
-
-    return NextResponse.json({
-      success: true,
-      isSimulation: false,
-      videoId: uploadResult.videoId,
-      videoUrl: uploadResult.videoUrl,
-      isShorts: uploadResult.isShorts,
-      title,
-    });
-  } catch (error: any) {
-    const errorMsg =
-      error?.response?.data?.error?.message ||
-      error?.message ||
-      "Gagal mengunggah video ke YouTube.";
-    return NextResponse.json({ success: false, error: errorMsg }, { status: 500 });
+    return NextResponse.json({ success: true, uploadUrl });
+  } catch (e: any) {
+    return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }
 }
