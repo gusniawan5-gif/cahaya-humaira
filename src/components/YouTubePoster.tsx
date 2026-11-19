@@ -98,7 +98,33 @@ export default function YouTubePoster({
       while (uploaded < videoFile!.size) {
         const end = Math.min(uploaded + CHUNK, videoFile!.size);
         const chunk = videoFile!.slice(uploaded, end);
-        const putRes = await fetch(initData.uploadUrl, {
+              while (uploaded < videoFile!.size) {
+        const end = Math.min(uploaded + CHUNK, videoFile!.size);
+        const chunk = videoFile!.slice(uploaded, end);
+        let putRes: Response | null = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            putRes = await fetch(initData.uploadUrl, {
+              method: "PUT",
+              headers: {
+                "Content-Type": videoFile!.type || "video/mp4",
+                "Content-Range": `bytes ${uploaded}-${end - 1}/${videoFile!.size}`,
+              },
+              body: chunk,
+            });
+            break; // berhasil, keluar dari retry
+          } catch (e) {
+            if (attempt === 3) throw e;
+            await new Promise(r => setTimeout(r, 2000)); // tunggu 2 detik, coba lagi
+          }
+        }
+        if (!putRes) throw new Error("Gagal kirim chunk");
+        uploaded = end;
+        setUploadProgress(Math.round((uploaded / videoFile!.size) * 100));
+        if (putRes.status === 200 || putRes.status === 201) {
+          lastResult = await putRes.json();
+        }
+      }
           method: "PUT",
           headers: {
             "Content-Type": videoFile!.type || "video/mp4",
